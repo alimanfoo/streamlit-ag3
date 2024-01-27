@@ -1,0 +1,9 @@
+name: streamlit-ag3
+channels:
+  - conda-forge
+dependencies:
+  - python==3.11.*
+  - pip
+  - pip:
+    - malariagen_data
+    - streamlit
