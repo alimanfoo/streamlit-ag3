@@ -1,12 +1,6 @@
-import pprint
+from textwrap import dedent
 import streamlit as st
-import malariagen_data
-
-
-printer = pprint.PrettyPrinter(indent=4, compact=False)
-
-
-st.set_page_config(layout="wide")
+import malariagen_data  # type: ignore
 
 
 @st.cache_resource
@@ -21,70 +15,93 @@ def load_sample_sets():
     return df_ss
 
 
-st.title('Sample sets')
+def init_session():
+
+    if "sample_sets_reset" not in st.session_state:
+        st.session_state.sample_sets_reset = 0
+
+    if "sample_sets_df" not in st.session_state:
+        sample_sets_df = load_sample_sets()
+        sample_sets_df.insert(0, "selected", False)
+        st.session_state.sample_sets_df = sample_sets_df
 
 
-df_ss = load_sample_sets()
-df_sel = df_ss.copy()
-df_sel.insert(0, "select", False)
+def reset_button_on_click():
+    st.session_state.sample_sets_reset += 1
 
 
-edited_df = st.data_editor(
-    df_sel,
-    hide_index=True,
-    column_config={"select": st.column_config.CheckboxColumn(required=True)},
-    disabled=df_ss.columns,
-    use_container_width=True,
-)
-selected_sets = edited_df[edited_df.select]["sample_set"].to_list()
-
-
-if st.button("clear all"):
-    # TODO broken
-    st.write("cleared")
-    df_sel["select"] = False
-    edited_df["select"] = False
-
-
-example_content = """
-To use these sample sets in your analysis, declare a variable like this:
-```
-sample_sets = [
-"""
-for s in selected_sets:
-    example_content += f"    {s!r},\n"
-example_content += """]
-```
-"""
-if selected_sets:
-    st.markdown(example_content)
-
-
-    """
-    Here is a summary of the number of samples in these sample sets, by region, year and taxon:
-    """
-
-
-    ag3 = connect_ag3()
-    df_ov = ag3.count_samples(sample_sets=selected_sets).reset_index()
-    st.dataframe(df_ov.style, hide_index=True)
-
-
-    """
-    Here is a map of sampling locations:
-    """
-
-
-    df_samples = ag3.sample_metadata(sample_sets=selected_sets)
-    df_locations = (
-        df_samples
-        .groupby(by=["longitude", "latitude"])
-        .agg({"location": "first"})
-        .reset_index()
+def render_sample_sets_data_frame():
+    reset = st.session_state.sample_sets_reset
+    data = st.session_state.sample_sets_df
+    st.session_state.sample_sets_edited_df = st.data_editor(
+        data=data,
+        key=f"sample_sets_data_editor_{reset}",
+        hide_index=True,
+        column_config={
+            "selected": st.column_config.CheckboxColumn(required=True),
+        },
+        disabled=data.columns[1:],
+        use_container_width=True,
     )
-    st.map(df_locations)
+    st.button("reset", key="reset_button", on_click=reset_button_on_click)
 
-else:
-    """
-    Select one or more sample sets to view further information.
-    """
+
+def render_example_code():
+    data = st.session_state.sample_sets_edited_df
+    selected_sets = data[data.selected]["sample_set"].to_list()
+    example_content = dedent("""\
+        To use these sample sets in your analysis, declare a variable like this:
+        ```
+        sample_sets = [
+    """)
+    for s in selected_sets:
+        example_content += f"    {s!r},\n"
+    example_content += dedent("""\
+        ]
+        ```
+    """)
+    if selected_sets:
+        st.markdown(example_content)
+
+
+
+def render():
+    st.set_page_config(layout="wide")
+    init_session()
+    st.title('Sample sets')
+    render_sample_sets_data_frame()
+    render_example_code()
+
+
+if __name__ == "__main__":
+    render()
+
+
+#     """
+#     Here is a summary of the number of samples in these sample sets, by region, year and taxon:
+#     """
+
+
+#     ag3 = connect_ag3()
+#     df_ov = ag3.count_samples(sample_sets=selected_sets).reset_index()
+#     st.dataframe(df_ov.style, hide_index=True)
+
+
+#     """
+#     Here is a map of sampling locations:
+#     """
+
+
+#     df_samples = ag3.sample_metadata(sample_sets=selected_sets)
+#     df_locations = (
+#         df_samples
+#         .groupby(by=["longitude", "latitude"])
+#         .agg({"location": "first"})
+#         .reset_index()
+#     )
+#     st.map(df_locations)
+
+# else:
+#     """
+#     Select one or more sample sets to view further information.
+#     """
